@@ -56,7 +56,7 @@ O sistema foi construído sobre uma arquitetura de três camadas lógicas princi
 | **Firmware (Dual-Core)** | **Core 1:** `TaskCore1_IA` (Inferência de Áudio) e `TaskSentinela` (Leitura de Sensores).<br>**Core 0:** `TaskCore0_Telegram` (Comunicação HTTPS).<br>**Comunicação Interna:** FreeRTOS Queue (Fila de mensagens). |
 | **Comunicação/Interface** | Wi-Fi (HTTPS), API do Telegram, Bot interativo. |
 
-*Detalhes de pinagem, diagramas e protocolo de dados estão no arquivo [docs/Documentacao_Tecnica.md](docs/Documentacao_Tecnica_Plataforma_IoT.docx).*
+*Detalhes de pinagem, diagramas e protocolo de dados estão no arquivo [docs/Documentacao_Tecnica_Plataforma_IoT.docx](docs/Documentacao_Tecnica_Plataforma_IoT.docx).*
 
 ## 5. Implementação
 ### 5.1 Firmware (Camada do Dispositivo)
