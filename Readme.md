@@ -30,7 +30,7 @@ Desenvolver um protótipo funcional, de baixo custo (abaixo de R$300), capaz de 
 *   **Software/Firmware:** C++ com FreeRTOS, TensorFlow Lite Micro (via Edge Impulse), API do Telegram (UniversalTelegramBot).
 *   **Lógica:** Arquitetura Dual-Core, filas de mensagens e envio resiliente com *backoff* exponencial.
 
-### 3.2 Fora do escopo (O que não foi implementado nesta versão)
+### 3.2 Fora do escopo
 *   **Display OLED:** Removido para priorizar o processamento da IA e evitar bloqueios no barramento I2C.
 *   **Isolamento por Optoacoplador e Regulador Buck:** O protótipo final utiliza a saída de contato seco ligada diretamente ao GND do ESP32 com *pull-up* interno, e alimentação via USB de 5V.
 *   **Nuvem/Backend próprio:** O sistema utiliza a infraestrutura serverless do Telegram.
@@ -61,13 +61,13 @@ O sistema foi construído sobre uma arquitetura de três camadas lógicas princi
 ## 5. Implementação
 ### 5.1 Firmware (Camada do Dispositivo)
 *   **Arquitetura Dual-Core:** O envio de mensagens via SSL/TLS no Telegram pode travar o processador por até 3 segundos. Para evitar perda de frames de áudio, o Core 1 fica exclusivamente dedicado à IA e aos sensores (tempo real), enquanto o Core 0 lida com a latência da internet.
-*   **Filtro de Falsos Positivos:** A `TaskCore1_IA` exige uma margem de confiança assimétrica para disparar alertas: 80% para "Socorro" e 65% para "Ajuda", garantindo que a palavra vencedora seja pelo menos 50% maior que a segunda colocada.
+*   **Filtro de Falsos Positivos (Limiar Assimétrico):** A `TaskCore1_IA` exige uma margem de confiança assimétrica para disparar alertas: 80% para "Socorro" e 65% para "Ajuda", garantindo que a palavra vencedora seja pelo menos 50% maior que a segunda colocada.
 *   **Debounce do Sensor de Fumaça:** A `TaskSentinela` lê o sensor a cada 200ms, mas só confirma uma mudança de estado após 2 leituras consecutivas idênticas, evitando alarmes falsos por picos elétricos.
 *   **Privacidade:** O áudio bruto (`sampleBuffer32`) é convertido para 16 bits, processado para extração de MFCC e descartado da memória imediatamente após a inferência.
 
 ### 5.2 Comunicação e Interface
 *   **Envio Resiliente:** Se a conexão Wi-Fi falhar durante um alerta de emergência, a mensagem não é perdida. A `TaskCore0_Telegram` mantém o alerta na memória e tenta reenviá-lo com atrasos progressivos (5s, 10s, 15s...) por até 5 minutos.
-*   **Bot do Telegram:** O bot é capaz de receber comandos administrativos em tempo real (`add:ID`, `del:ID`, `/list`) e salva a lista de contatos na memória NVS (não volátil) do ESP32, mantendo os dados mesmo se a placa for reiniciada.
+*   **Bot do Telegram:** O bot é capaz de receber comandos administrativos em tempo real (`add:ID`, `del:ID`, `/list`) e salva a lista de contatos na memória NVS (não volátil) do ESP32.
 
 ## 6. Metodologia de testes
 A validação do sistema ocorreu em diferentes níveis:
@@ -77,37 +77,40 @@ A validação do sistema ocorreu em diferentes níveis:
 
 ## 7. Resultados
 ### 7.1 O que foi validado
-*   **Acurácia da IA:** O modelo DS-CNN treinado no Edge Impulse atingiu estabilidade de detecção, disparando alertas com 100% de confiança em testes controlados.
+*   **Acurácia da IA:** O modelo DS-CNN treinado no Edge Impulse atingiu estabilidade de detecção, disparando alertas com alta confiança em testes controlados.
 *   **Estabilidade do Sistema:** A arquitetura Dual-Core eliminou os erros de *Watchdog Reset* (reinicializações inesperadas) que ocorriam quando a IA e o Wi-Fi rodavam no mesmo núcleo.
 *   **Entrega Garantida:** A fila de mensagens + rotina de *retry* garantiu que nenhum alerta fosse perdido durante oscilações da rede.
 
 ### 7.2 Problemas encontrados e tratados
 | Item | Problema | Causa e correção | Status |
 | :--- | :--- | :--- | :--- |
-| 1 | Falsos positivos para "Socorro" | Ruídos ambientais. Correção: Aumento do limiar de confiança para 80% e exigência de margem sobre a segunda classe. | Aprovado |
+| 1 | Falsos positivos para "Socorro" em ambiente silencioso | Ruídos transitórios. Correção: Aumento do limiar de confiança para 80% e exigência de margem sobre a segunda classe. | Aprovado |
 | 2 | Erro `Bad file number` no SSL | Socket anterior não era fechado. Correção: Inserção de `client.stop()` antes de novas tentativas de envio. | Aprovado |
 | 3 | Estouro de memória (Crash) | Concorrência entre Wi-Fi e Áudio. Correção: Separação das tarefas via FreeRTOS em núcleos distintos. | Aprovado |
+| 4 | **Falsos positivos em ambientes com muita conversa** | **Alto volume de vozes sobrepostas e ruído de fundo.** O modelo confunde fonemas com "Socorro". | **Parcial / Em aberto** |
 
 ## 8. Problemas pendentes de solução
-### 8.1 Sensibilidade a ruídos extremos
-Embora o limiar de 80% tenha reduzido os falsos positivos, ambientes com secadores de cabelo ou ruídos muito agudos ainda podem confundir a rede neural.
-*   *Teste decisivo:* Coletar áudios reais do ambiente de instalação final (in loco) e retreinar o modelo no Edge Impulse.
+### 8.1 Falsos Positivos em Ambientes com Alto Volume de Conversa
+Durante os testes de campo, foi observado que em ambientes onde há um fluxo contínuo e elevado de conversação (muitas pessoas falando simultaneamente), a rede neural pode gerar falsos positivos para a palavra "Socorro".
+*   *Causa:* O dataset de treinamento foi construído majoritariamente com vozes sintéticas (Piper TTS) e complementado com algumas gravações reais isoladas. Esse dataset não contempla a complexidade acústica de um ambiente real com sobreposição de vozes, eco e ruídos de fundo característicos de locais públicos.
+*   *Solução Proposta:* A próxima etapa do projeto consistirá em coletar amostras de áudio diretamente no ambiente de uso final (in loco), capturando o ruído real e o murmúrio de conversas cruzadas. Esses dados serão inseridos no Edge Impulse para retreinar o modelo, ensinando a IA a classificar especificamente esse tipo de ruído como "Noise" (Ruído) ou "Unknown" (Desconhecido), aumentando a robustez do sistema.
 
 ## 9. Limitações
+*   **Sensibilidade Acústica:** O modelo atual apresenta limitações em ambientes com altíssimo volume de conversação simultânea, podendo gerar falsos alertas (vide seção 8.1).
 *   **Dependência de Energia:** O protótipo atual depende de uma fonte USB contínua de 5V, não possuindo bateria interna.
 *   **Palavras-chave Restritas:** O modelo foi treinado especificamente para "Socorro" e "Ajuda". Outras palavras de emergência não são reconhecidas.
 *   **Dependência de Rede:** Sem conexão Wi-Fi, o sistema detecta o evento e retém a mensagem, mas não consegue entregá-la até que a rede retorne.
 
 ## 10. Aspectos éticos e legais
-O projeto foi desenhado em conformidade com os princípios da LGPD (Lei Geral de Proteção de Dados). **O dispositivo não realiza a gravação, armazenamento ou transmissão de áudio bruto.** O microfone é utilizado exclusivamente para extração matemática de coeficientes (MFCCs) para a Inteligência Artificial local. Nenhum dado biométrico ou de voz é enviado para servidores de terceiros; apenas o texto do alerta de emergência é transmitido via API do Telegram.
+O projeto foi desenhado em conformidade com os princípios da LGPD. **O dispositivo não realiza a gravação, armazenamento ou transmissão de áudio bruto.** O microfone é utilizado exclusivamente para extração matemática de coeficientes (MFCCs) para a Inteligência Artificial local. Nenhum dado biométrico ou de voz é enviado para servidores de terceiros; apenas o texto do alerta de emergência é transmitido via API do Telegram.
 
 ## 11. Conclusão e trabalhos futuros
-O projeto cumpriu o objetivo central de desenvolver um protótipo de segurança multimodal de baixo custo. A união de Inteligência Artificial Embarcada (TinyML) com uma arquitetura de software resiliente (FreeRTOS Dual-Core) provou ser viável e robusta. 
+O projeto cumpriu o objetivo central de desenvolver um protótipo de segurança multimodal de baixo custo. A união de Inteligência Artificial Embarcada (TinyML) com uma arquitetura de software resiliente (FreeRTOS Dual-Core) provou ser viável e robusta.
 
 **Próximos passos:**
-*   Implementar uma bateria LiPo com circuito de carregamento para autonomia em caso de queda de energia.
-*   Coletar um dataset real no ambiente final de uso para treinar uma versão 2.0 da IA, mais imune a ruídos locais.
-*   Adicionar um botão físico de pânico (hardware) como redundância ao comando de voz.
+*   Coletar um dataset real de "ruído de fundo" (conversas cruzadas) no ambiente final de uso e retreinar a IA (Versão 2.0).
+*   Implementar uma bateria LiPo com circuito de carregamento para autonomia.
+*   Adicionar um botão físico de pânico (hardware) como redundância.
 
 ## 12. Referências do projeto
 *   Repositório Oficial: [Link do GitHub a ser inserido]
