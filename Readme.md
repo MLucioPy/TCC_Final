@@ -113,7 +113,7 @@ O projeto cumpriu o objetivo central de desenvolver um protótipo de segurança 
 *   Adicionar um botão físico de pânico (hardware) como redundância.
 
 ## 12. Referências do projeto
-*   Repositório Oficial: [Link do GitHub a ser inserido]
+*   Repositório Oficial: https://github.com/MLucioPy/TCC_Final.git
 *   Edge Impulse Documentation: https://docs.edgeimpulse.com/
 *   Espressif ESP32-S3 Technical Reference Manual.
 *   Telegram Bot API Documentation.
