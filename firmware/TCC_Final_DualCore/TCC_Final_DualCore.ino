@@ -99,10 +99,10 @@
 // CREDENCIAIS E CONFIGURAÇÕES
 // (são os "dados de acesso": rede Wi-Fi e a identidade do bot)
 // ============================================================
-const char* ssid = "S23_Moises";          // Nome da rede Wi-Fi
-const char* password = "maria2108";       // Senha da rede Wi-Fi
-#define BOT_TOKEN "9055987351:AAGsqW8hpkg1GE_XustRxhHSxCJGrWzhLAM" // "Senha" do bot do Telegram
-#define MASTER_CHAT_ID "8665578181"       // Conversa do "administrador" (quem manda nos comandos)
+const char* ssid = "xxxxxxx";          // Nome da rede Wi-Fi
+const char* password = "xxxxxxxx";       // Senha da rede Wi-Fi
+#define BOT_TOKEN "8xxxxxx" // "Senha" do bot do Telegram
+#define MASTER_CHAT_ID "8xxxxxx"       // Conversa do "administrador" (quem manda nos comandos)
 
 // Servidor que informa a hora certa pela internet
 const char* ntpServer = "pool.ntp.org";
